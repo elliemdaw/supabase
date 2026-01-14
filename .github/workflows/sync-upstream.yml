@@ -33,7 +33,7 @@ jobs:
 
       - name: Update tracks-upstream branch
         run: |
-          git checkout -B tracks-upstream upstream/main
+          git checkout -B tracks-upstream upstream/master
 
       - name: Disable upstream workflows
         run: |
@@ -54,13 +54,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          existing=$(gh pr list --head tracks-upstream --base main --json number -q '.[0].number')
+          existing=$(gh pr list --head tracks-upstream --base master --json number -q '.[0].number')
           if [ -z "$existing" ]; then
             gh pr create \
               --title "⬆️ Sync upstream changes ($(date +%Y-%m-%d))" \
               --body "Weekly sync from upstream repository." \
-              --head tracks-upstream \
-              --base main
+              --head elliemdaw:tracks-upstream \
+              --base elliemdaw:master
           else
             echo "PR #$existing already exists"
           fi
