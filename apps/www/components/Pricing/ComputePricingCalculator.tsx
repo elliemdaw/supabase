@@ -1,3 +1,5 @@
+'use client'
+
 import { InformationCircleIcon } from '@heroicons/react/outline'
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -30,8 +32,11 @@ const findIntanceValueByColumn = (instance: any, column: string) =>
 
 const parsePrice = (price: string) => parseInt(price?.toString().replace('$', '').replace(',', ''))
 
-const ComputePricingCalculator = () => {
-  const computeInstances = pricingAddOn.database.rows
+const ComputePricingCalculator = ({ disableInteractivity }: { disableInteractivity?: boolean }) => {
+  // Filter out rows with no specific pricing
+  const computeInstances = pricingAddOn.database.rows.filter((row) =>
+    row.columns.some((it) => it.key === 'pricing' && it.value !== 'Contact Us')
+  )
   const priceSteps = computeInstances.map((instance) =>
     parsePrice(findIntanceValueByColumn(instance, 'pricing'))
   )
@@ -290,12 +295,13 @@ const ComputePricingCalculator = () => {
             type="outline"
             block
             icon={<Plus />}
-            onClick={() =>
+            onClick={() => {
+              if (disableInteractivity) return
               setActiveInstances([
                 ...activeInstances,
                 { ...computeInstances[0], position: activeInstances.length },
               ])
-            }
+            }}
             className="w-full border-dashed text-foreground-light hover:text-foreground"
           >
             <span className="w-full text-left">Add Project</span>

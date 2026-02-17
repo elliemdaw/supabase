@@ -1,24 +1,29 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { isEqual } from 'lodash'
 import { AlertCircle, Book, Check } from 'lucide-react'
 import { useRouter } from 'next/router'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import * as z from 'zod'
 
+import { FileData } from '@/components/ui/FileExplorerAndEditor/FileExplorerAndEditor.types'
+import { useLatest } from '@/hooks/misc/useLatest'
 import { useParams } from 'common'
 import { EDGE_FUNCTION_TEMPLATES } from 'components/interfaces/Functions/Functions.templates'
-import DefaultLayout from 'components/layouts/DefaultLayout'
+import { DefaultLayout } from 'components/layouts/DefaultLayout'
 import EdgeFunctionsLayout from 'components/layouts/EdgeFunctionsLayout/EdgeFunctionsLayout'
 import { PageLayout } from 'components/layouts/PageLayout/PageLayout'
-import FileExplorerAndEditor from 'components/ui/FileExplorerAndEditor/FileExplorerAndEditor'
+import { SIDEBAR_KEYS } from 'components/layouts/ProjectLayout/LayoutSidebar/LayoutSidebarProvider'
+import { FileExplorerAndEditor } from 'components/ui/FileExplorerAndEditor'
 import { useEdgeFunctionDeployMutation } from 'data/edge-functions/edge-functions-deploy-mutation'
 import { useSendEventMutation } from 'data/telemetry/send-event-mutation'
-import { useOrgOptedIntoAi } from 'hooks/misc/useOrgOptedIntoAi'
-import { useSelectedOrganization } from 'hooks/misc/useSelectedOrganization'
-import { useSelectedProject } from 'hooks/misc/useSelectedProject'
-import { BASE_PATH, IS_PLATFORM } from 'lib/constants'
+import { useIsFeatureEnabled } from 'hooks/misc/useIsFeatureEnabled'
+import { useSelectedOrganizationQuery } from 'hooks/misc/useSelectedOrganization'
+import { useSelectedProjectQuery } from 'hooks/misc/useSelectedProject'
+import { BASE_PATH } from 'lib/constants'
 import { useAiAssistantStateSnapshot } from 'state/ai-assistant-state'
+import { useSidebarManagerSnapshot } from 'state/sidebar-manager-state'
 import {
   AiIconAnimation,
   Button,
@@ -96,29 +101,38 @@ const sanitizeFunctionName = (name: string): string => {
 // Type for the form values
 type FormValues = z.infer<typeof FormSchema>
 
+const INITIAL_FILES: FileData[] = [
+  {
+    id: 1,
+    name: 'index.ts',
+    content: EDGE_FUNCTION_TEMPLATES[0].content,
+    state: 'new',
+  },
+]
+
 const NewFunctionPage = () => {
   const router = useRouter()
   const { ref, template } = useParams()
-  const project = useSelectedProject()
-  const isOptedInToAI = useOrgOptedIntoAi()
-  const includeSchemaMetadata = isOptedInToAI || !IS_PLATFORM
+  const { data: project } = useSelectedProjectQuery()
+  const { data: org } = useSelectedOrganizationQuery()
   const snap = useAiAssistantStateSnapshot()
   const { mutate: sendEvent } = useSendEventMutation()
-  const org = useSelectedOrganization()
+  const showStripeExample = useIsFeatureEnabled('edge_functions:show_stripe_example')
+  const { openSidebar } = useSidebarManagerSnapshot()
 
-  const [files, setFiles] = useState<
-    { id: number; name: string; content: string; selected?: boolean }[]
-  >([
-    {
-      id: 1,
-      name: 'index.ts',
-      selected: true,
-      content: EDGE_FUNCTION_TEMPLATES[0].content,
-    },
-  ])
+  const [files, setFiles] = useState<FileData[]>(INITIAL_FILES)
+  const [selectedFileId, setSelectedFileId] = useState<number>(INITIAL_FILES[0].id)
   const [open, setOpen] = useState(false)
   const [isPreviewingTemplate, setIsPreviewingTemplate] = useState(false)
   const [savedCode, setSavedCode] = useState<string>('')
+
+  const templates = useMemo(() => {
+    if (showStripeExample) {
+      return EDGE_FUNCTION_TEMPLATES
+    }
+    // Filter out Stripe template
+    return EDGE_FUNCTION_TEMPLATES.filter((template) => template.value !== 'stripe-webhook')
+  }, [showStripeExample])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
@@ -127,7 +141,7 @@ const NewFunctionPage = () => {
     },
   })
 
-  const { mutate: deployFunction, isLoading: isDeploying } = useEdgeFunctionDeployMutation({
+  const { mutate: deployFunction, isPending: isDeploying } = useEdgeFunctionDeployMutation({
     // [Joshen] To investigate: For some reason, the invalidation for list of edge functions isn't triggering
     onSuccess: () => {
       toast.success('Successfully deployed edge function')
@@ -144,13 +158,10 @@ const NewFunctionPage = () => {
     deployFunction({
       projectRef: ref,
       slug: values.functionName,
-      metadata: {
-        entrypoint_path: 'index.ts',
-        name: values.functionName,
-        verify_jwt: true,
-      },
+      metadata: { name: values.functionName, verify_jwt: true },
       files: files.map(({ name, content }) => ({ name, content })),
     })
+
     sendEvent({
       action: 'edge_function_deploy_button_clicked',
       properties: { origin: 'functions_editor' },
@@ -159,20 +170,33 @@ const NewFunctionPage = () => {
   }
 
   const handleChat = () => {
-    const selectedFile = files.find((f) => f.selected) ?? files[0]
+    const selectedFile = files.find((f) => f.id === selectedFileId)
+
+    openSidebar(SIDEBAR_KEYS.AI_ASSISTANT)
     snap.newChat({
       name: 'Explain edge function',
-      open: true,
-      sqlSnippets: [selectedFile.content],
+      sqlSnippets: [selectedFile?.content ?? ''],
       initialInput: 'Help me understand and improve this edge function...',
       suggestions: {
         title:
           'I can help you understand and improve your edge function. Here are a few example prompts to get you started:',
         prompts: [
-          'Explain what this function does...',
-          'Help me optimize this function...',
-          'Show me how to add more features...',
-          'Help me handle errors better...',
+          {
+            label: 'Explain Function',
+            description: 'Explain what this function does...',
+          },
+          {
+            label: 'Optimize Function',
+            description: 'Help me optimize this function...',
+          },
+          {
+            label: 'Add Features',
+            description: 'Show me how to add more features...',
+          },
+          {
+            label: 'Error Handling',
+            description: 'Help me handle errors better...',
+          },
         ],
       },
     })
@@ -187,7 +211,9 @@ const NewFunctionPage = () => {
     const template = EDGE_FUNCTION_TEMPLATES.find((t) => t.value === templateValue)
     if (template) {
       setFiles((prev) =>
-        prev.map((file) => (file.selected ? { ...file, content: template.content } : file))
+        prev.map((file) =>
+          file.id === selectedFileId ? { ...file, content: template.content } : file
+        )
       )
       setOpen(false)
       sendEvent({
@@ -196,22 +222,23 @@ const NewFunctionPage = () => {
         groups: { project: ref ?? 'Unknown', organization: org?.slug ?? 'Unknown' },
       })
     }
+    setIsPreviewingTemplate(false)
   }
 
   const handleTemplateMouseEnter = (content: string) => {
     if (!isPreviewingTemplate) {
-      const selectedFile = files.find((f) => f.selected) ?? files[0]
+      const selectedFile = files.find((f) => f.id === selectedFileId) ?? files[0]
       setSavedCode(selectedFile.content)
     }
     setIsPreviewingTemplate(true)
-    setFiles((prev) => prev.map((file) => (file.selected ? { ...file, content } : file)))
+    setFiles((prev) => prev.map((f) => (f.id === selectedFileId ? { ...f, content } : f)))
   }
 
   const handleTemplateMouseLeave = () => {
     if (isPreviewingTemplate) {
       setIsPreviewingTemplate(false)
       setFiles((prev) =>
-        prev.map((file) => (file.selected ? { ...file, content: savedCode } : file))
+        prev.map((f) => (f.id === selectedFileId ? { ...f, content: savedCode } : f))
       )
     }
   }
@@ -234,18 +261,35 @@ const NewFunctionPage = () => {
       const templateMeta = EDGE_FUNCTION_TEMPLATES.find((x) => x.value === template)
       if (templateMeta) {
         form.reset({ functionName: template })
+        setSelectedFileId(1)
         setFiles([
           {
             id: 1,
             name: 'index.ts',
-            selected: true,
             content: templateMeta.content,
+            state: 'new',
           },
         ])
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template])
+
+  // [Joshen] Probably a candidate for useStaticEffectEvent
+  const filesRef = useLatest(files)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const hasUnsavedChanges = !isEqual(INITIAL_FILES, filesRef.current)
+
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = '' // deprecated, but older browsers still require this
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <PageLayout
@@ -272,13 +316,13 @@ const NewFunctionPage = () => {
                 Templates
               </Button>
             </PopoverTrigger_Shadcn_>
-            <PopoverContent_Shadcn_ portal className="w-[300px] p-0" align="end">
+            <PopoverContent_Shadcn_ className="w-[300px] p-0" align="end">
               <Command_Shadcn_>
                 <CommandInput_Shadcn_ placeholder="Search templates..." />
                 <CommandList_Shadcn_>
                   <CommandEmpty_Shadcn_>No templates found.</CommandEmpty_Shadcn_>
                   <CommandGroup_Shadcn_>
-                    {EDGE_FUNCTION_TEMPLATES.map((template) => (
+                    {templates.map((template) => (
                       <CommandItem_Shadcn_
                         key={template.value}
                         value={template.value}
@@ -292,7 +336,7 @@ const NewFunctionPage = () => {
                             <Check
                               className={cn(
                                 'mr-2 h-4 w-4',
-                                files.some((f) => f.selected && f.content === template.content)
+                                files.some((f) => f.content === template.content)
                                   ? 'opacity-100'
                                   : 'opacity-0'
                               )}
@@ -324,12 +368,14 @@ const NewFunctionPage = () => {
       <FileExplorerAndEditor
         files={files}
         onFilesChange={setFiles}
-        aiEndpoint={`${BASE_PATH}/api/ai/edge-function/complete`}
+        aiEndpoint={`${BASE_PATH}/api/ai/code/complete`}
         aiMetadata={{
           projectRef: project?.ref,
           connectionString: project?.connectionString,
-          includeSchemaMetadata,
+          orgSlug: org?.slug,
         }}
+        selectedFileId={selectedFileId}
+        setSelectedFileId={setSelectedFileId}
       />
 
       <Form_Shadcn_ {...form}>

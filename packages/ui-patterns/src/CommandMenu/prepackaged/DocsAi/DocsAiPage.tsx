@@ -1,18 +1,17 @@
 'use client'
 
+import { useBreakpoint } from 'common'
 import { User } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-
-import { useBreakpoint } from 'common'
 import {
   AiIconAnimation,
   Button,
+  cn,
   CommandGroup_Shadcn_,
   CommandItem_Shadcn_,
   CommandList_Shadcn_,
-  cn,
   markdownComponents,
 } from 'ui'
 import { StatusIcon } from 'ui/src/components/StatusIcon'
@@ -256,6 +255,25 @@ function AiMessages({ messages }: { messages: Array<Message> }) {
                     >
                       {message.content}
                     </ReactMarkdown>
+                    {message.sources && message.sources.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-border-muted">
+                        <p className="text-sm text-foreground-muted mb-2">Sources:</p>
+                        <ul className="space-y-1">
+                          {message.sources.map((source, idx) => (
+                            <li key={idx}>
+                              <a
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-brand hover:underline"
+                              >
+                                {source.url}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </Fragment>
               )

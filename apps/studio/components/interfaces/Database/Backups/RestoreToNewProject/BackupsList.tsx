@@ -1,10 +1,10 @@
-import { useProjectContext } from 'components/layouts/ProjectLayout/ProjectContext'
 import Panel from 'components/ui/Panel'
 import { useCloneBackupsQuery } from 'data/projects/clone-query'
-import { useSelectedOrganization } from 'hooks/misc/useSelectedOrganization'
+import { useSelectedOrganizationQuery } from 'hooks/misc/useSelectedOrganization'
+import { useSelectedProjectQuery } from 'hooks/misc/useSelectedProject'
 import { Badge, Button } from 'ui'
 import { TimestampInfo } from 'ui-patterns'
-import BackupsEmpty from '../BackupsEmpty'
+import { BackupsEmpty } from '../BackupsEmpty'
 
 interface BackupsListProps {
   onSelectRestore: (id: number) => void
@@ -12,8 +12,8 @@ interface BackupsListProps {
 }
 
 export const BackupsList = ({ onSelectRestore, disabled }: BackupsListProps) => {
-  const { project } = useProjectContext()
-  const organization = useSelectedOrganization()
+  const { data: project } = useSelectedProjectQuery()
+  const { data: organization } = useSelectedOrganizationQuery()
 
   const isFreePlan = organization?.plan?.id === 'free'
 
@@ -35,7 +35,12 @@ export const BackupsList = ({ onSelectRestore, disabled }: BackupsListProps) => 
               return (
                 <div className="grid grid-cols-4 gap-4 items-center p-4" key={backup.id}>
                   <div>
-                    <TimestampInfo utcTimestamp={backup.inserted_at} />
+                    <TimestampInfo
+                      displayAs="utc"
+                      utcTimestamp={backup.inserted_at}
+                      labelFormat="DD MMM YYYY HH:mm:ss (ZZ)"
+                      className="text-left !text-sm font-mono tracking-tight"
+                    />
                   </div>
                   <div>
                     <Badge>{JSON.stringify(backup.status).replaceAll('"', '')}</Badge>

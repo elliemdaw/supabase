@@ -1,17 +1,19 @@
-import { PropsWithChildren, createContext, useContext, useEffect, useRef } from 'react'
-import { CalculatedColumn } from 'react-data-grid'
-import { proxy, ref, subscribe, useSnapshot } from 'valtio'
-import { proxySet } from 'valtio/utils'
-
+import { useFlag } from 'common'
 import {
   loadTableEditorStateFromLocalStorage,
   parseSupaTable,
   saveTableEditorStateToLocalStorageDebounced,
 } from 'components/grid/SupabaseGrid.utils'
-import { SupaRow } from 'components/grid/types'
+import { TableIndexAdvisorProvider } from 'components/grid/context/TableIndexAdvisorContext'
+import { Filter, SupaRow } from 'components/grid/types'
 import { getInitialGridColumns } from 'components/grid/utils/column'
 import { getGridColumns } from 'components/grid/utils/gridColumns'
 import { Entity } from 'data/table-editor/table-editor-types'
+import { PropsWithChildren, createContext, useContext, useEffect, useRef } from 'react'
+import { CalculatedColumn } from 'react-data-grid'
+import { proxy, ref, subscribe, useSnapshot } from 'valtio'
+import { proxySet } from 'valtio/utils'
+
 import { useTableEditorStateSnapshot } from './table-editor'
 
 export const createTableEditorTableState = ({
@@ -32,7 +34,7 @@ export const createTableEditorTableState = ({
 }) => {
   const table = parseSupaTable(originalTable)
 
-  const savedState = loadTableEditorStateFromLocalStorage(projectRef, table.name, table.schema)
+  const savedState = loadTableEditorStateFromLocalStorage(projectRef, table.id)
   const gridColumns = getInitialGridColumns(
     getGridColumns(table, {
       tableId: table.id,
@@ -61,8 +63,8 @@ export const createTableEditorTableState = ({
       const gridColumns = getInitialGridColumns(
         getGridColumns(supaTable, {
           tableId: table.id,
-          editable,
-          onAddColumn: editable ? onAddColumn : undefined,
+          editable: state.editable,
+          onAddColumn: state.editable ? onAddColumn : undefined,
           onExpandJSONEditor,
           onExpandTextEditor,
         }),
@@ -81,6 +83,10 @@ export const createTableEditorTableState = ({
     setSelectedRows: (rows: Set<number>, selectAll?: boolean) => {
       state.allRowsSelected = selectAll ?? false
       state.selectedRows = proxySet(rows)
+    },
+    resetSelectedRows: () => {
+      state.allRowsSelected = false
+      state.selectedRows = proxySet(new Set())
     },
 
     /* Columns */
@@ -141,6 +147,30 @@ export const createTableEditorTableState = ({
     },
 
     editable,
+    setEditable: (editable: boolean) => {
+      state.editable = editable
+
+      // When changing the editable flag, all grid columns need to be recreated for the editable flag to be propagated.
+      state.gridColumns = getInitialGridColumns(
+        getGridColumns(state.table, {
+          tableId: table.id,
+          editable,
+          onAddColumn: editable ? onAddColumn : undefined,
+          onExpandJSONEditor,
+          onExpandTextEditor,
+        }),
+        { gridColumns: state.gridColumns }
+      )
+    },
+
+    /* Filters (NOTE: this is only for the new AI filter bar) */
+    filters: [] as Filter[],
+    setFilters: (filters: Filter[]) => {
+      state.filters = filters
+    },
+    clearFilters: () => {
+      state.filters = []
+    },
   })
 
   return state
@@ -161,6 +191,7 @@ export const TableEditorTableStateContextProvider = ({
   table,
   ...props
 }: PropsWithChildren<TableEditorTableStateContextProviderProps>) => {
+  const showIndexAdvisor = useFlag('ShowIndexAdvisorOnTableEditor')
   const tableEditorSnap = useTableEditorStateSnapshot()
   const state = useRef(
     createTableEditorTableState({
@@ -187,8 +218,7 @@ export const TableEditorTableStateContextProvider = ({
         saveTableEditorStateToLocalStorageDebounced({
           gridColumns: state.gridColumns,
           projectRef,
-          tableName: state.table.name,
-          schema: state.table.schema,
+          tableId: state.table.id,
         })
       })
     }
@@ -203,9 +233,21 @@ export const TableEditorTableStateContextProvider = ({
     }
   }, [table])
 
+  useEffect(() => {
+    if (state.editable !== props.editable) {
+      state.setEditable(props.editable ?? true)
+    }
+  }, [props.editable, state])
+
   return (
     <TableEditorTableStateContext.Provider value={state}>
-      {children}
+      {showIndexAdvisor && state.table.schema ? (
+        <TableIndexAdvisorProvider schema={state.table.schema ?? 'public'} table={state.table.name}>
+          {children}
+        </TableIndexAdvisorProvider>
+      ) : (
+        children
+      )}
     </TableEditorTableStateContext.Provider>
   )
 }

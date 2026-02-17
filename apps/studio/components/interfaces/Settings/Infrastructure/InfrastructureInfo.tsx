@@ -1,5 +1,7 @@
-import { useParams } from 'common'
-import { useProjectContext } from 'components/layouts/ProjectLayout/ProjectContext'
+import Link from 'next/link'
+
+import { useFlag, useParams } from 'common'
+import { NoticeBar } from 'components/interfaces/DiskManagement/ui/NoticeBar'
 import {
   ScaffoldContainer,
   ScaffoldDivider,
@@ -8,36 +10,31 @@ import {
   ScaffoldSectionDetail,
 } from 'components/layouts/Scaffold'
 import AlertError from 'components/ui/AlertError'
-import { GenericSkeletonLoader } from 'components/ui/ShimmeringLoader'
 import { useProjectUpgradeEligibilityQuery } from 'data/config/project-upgrade-eligibility-query'
 import { useProjectServiceVersionsQuery } from 'data/projects/project-service-versions'
 import { useReadReplicasQuery } from 'data/read-replicas/replicas-query'
 import { useIsFeatureEnabled } from 'hooks/misc/useIsFeatureEnabled'
-import { useIsOrioleDb } from 'hooks/misc/useSelectedProject'
-import {
-  AlertDescription_Shadcn_,
-  AlertTitle_Shadcn_,
-  Alert_Shadcn_,
-  Badge,
-  Button,
-  Input,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from 'ui'
+import { useIsOrioleDb, useSelectedProjectQuery } from 'hooks/misc/useSelectedProject'
+import { Badge, Button, Input, Tooltip, TooltipContent, TooltipTrigger } from 'ui'
+import { Admonition } from 'ui-patterns/admonition'
+import { GenericSkeletonLoader } from 'ui-patterns/ShimmeringLoader'
 import { ProjectUpgradeAlert } from '../General/Infrastructure/ProjectUpgradeAlert'
-import InstanceConfiguration from './InfrastructureConfiguration/InstanceConfiguration'
+import { InstanceConfiguration } from './InfrastructureConfiguration/InstanceConfiguration'
+import { ReadReplicasWarning, ValidationErrorsWarning } from './UpgradeWarnings'
 
-const InfrastructureInfo = () => {
+export const InfrastructureInfo = () => {
   const { ref } = useParams()
-  const { project } = useProjectContext()
+  const { data: project } = useSelectedProjectQuery()
 
-  const authEnabled = useIsFeatureEnabled('project_auth:all')
+  const unifiedReplication = useFlag('unifiedReplication')
+
+  const { projectAuthAll: authEnabled, projectSettingsDatabaseUpgrades: showDatabaseUpgrades } =
+    useIsFeatureEnabled(['project_auth:all', 'project_settings:database_upgrades'])
 
   const {
     data,
     error,
-    isLoading: isLoadingUpgradeEligibility,
+    isPending: isLoadingUpgradeEligibility,
     isError: isErrorUpgradeEligibility,
     isSuccess: isSuccessUpgradeEligibility,
   } = useProjectUpgradeEligibilityQuery({
@@ -47,14 +44,11 @@ const InfrastructureInfo = () => {
   const {
     data: serviceVersions,
     error: serviceVersionsError,
-    isLoading: isLoadingServiceVersions,
+    isPending: isLoadingServiceVersions,
     isError: isErrorServiceVersions,
     isSuccess: isSuccessServiceVersions,
   } = useProjectServiceVersionsQuery({ projectRef: ref })
 
-  const { data: projectUpgradeEligibilityData } = useProjectUpgradeEligibilityQuery({
-    projectRef: ref,
-  })
   const { data: databases } = useReadReplicasQuery({ projectRef: ref })
   const { current_app_version, current_app_version_release_channel, latest_app_version } =
     data || {}
@@ -63,8 +57,9 @@ const InfrastructureInfo = () => {
   const currentPgVersion = (current_app_version ?? '')
     .split('supabase-postgres-')[1]
     ?.replace('-orioledb', '')
-  const isOnNonGenerallyAvailableReleaseChannel =
-    current_app_version_release_channel && current_app_version_release_channel !== 'ga'
+  const isVisibleReleaseChannel =
+    current_app_version_release_channel &&
+    !['ga', 'withdrawn'].includes(current_app_version_release_channel)
       ? current_app_version_release_channel
       : undefined
   const isOrioleDb = useIsOrioleDb()
@@ -73,36 +68,56 @@ const InfrastructureInfo = () => {
   const isInactive = project?.status === 'INACTIVE'
   const hasReadReplicas = (databases ?? []).length > 1
 
+  const hasValidationErrors = (data?.validation_errors ?? []).length > 0
+
   return (
     <>
       <ScaffoldDivider />
-      {project?.cloud_provider !== 'FLY' && (
-        <>
-          <InstanceConfiguration />
-          <ScaffoldDivider />
-        </>
-      )}
+      {project?.cloud_provider !== 'FLY' &&
+        (unifiedReplication ? (
+          <ScaffoldContainer>
+            <ScaffoldSection isFullWidth>
+              <NoticeBar
+                visible={true}
+                type="default"
+                title="Management of read replicas has moved"
+                description="Read replicas is now managed under Replication in the Database section."
+                actions={
+                  <Button type="default" asChild>
+                    <Link href={`/project/${ref}/database/replication`} className="!no-underline">
+                      Go to Replication
+                    </Link>
+                  </Button>
+                }
+              />
+            </ScaffoldSection>
+          </ScaffoldContainer>
+        ) : (
+          <>
+            <InstanceConfiguration />
+            <ScaffoldDivider />
+          </>
+        ))}
 
       <ScaffoldContainer>
         <ScaffoldSection>
           <ScaffoldSectionDetail>
-            <p>Service Versions</p>
-            <p className="text-foreground-light text-sm">
-              Information on your provisioned instance
+            <h4 className="text-base capitalize m-0">Service versions</h4>
+            <p className="text-foreground-light text-sm pr-8 mt-1">
+              Service versions and upgrade eligibility for your provisioned instance.
             </p>
           </ScaffoldSectionDetail>
           <ScaffoldSectionContent>
             {isInactive ? (
-              <Alert_Shadcn_>
-                <AlertTitle_Shadcn_>
-                  Service versions cannot be retrieved while project is paused
-                </AlertTitle_Shadcn_>
-                <AlertDescription_Shadcn_>
-                  Restoring the project will update Postgres to the newest version
-                </AlertDescription_Shadcn_>
-              </Alert_Shadcn_>
+              <Admonition
+                type="note"
+                showIcon={false}
+                title="Service versions cannot be retrieved while project is paused"
+                description="Restoring the project will update Postgres to the newest version"
+              />
             ) : (
               <>
+                {/* [Joshen] Double check why we need this waterfall loading behaviour here */}
                 {isLoadingUpgradeEligibility && <GenericSkeletonLoader />}
                 {isErrorUpgradeEligibility && (
                   <AlertError error={error} subject="Failed to retrieve Postgres version" />
@@ -138,16 +153,16 @@ const InfrastructureInfo = () => {
                           value={currentPgVersion || serviceVersions?.['supabase-postgres'] || ''}
                           label="Postgres version"
                           actions={[
-                            isOnNonGenerallyAvailableReleaseChannel && (
+                            isVisibleReleaseChannel && (
                               <Tooltip>
                                 <TooltipTrigger>
-                                  <Badge variant="warning" className="mr-1 capitalize">
-                                    {isOnNonGenerallyAvailableReleaseChannel}
+                                  <Badge variant="warning" className="mr-1">
+                                    {isVisibleReleaseChannel}
                                   </Badge>
                                 </TooltipTrigger>
                                 <TooltipContent side="bottom" className="w-44 text-center">
-                                  This project uses a {isOnNonGenerallyAvailableReleaseChannel}{' '}
-                                  database version release
+                                  This project uses a {isVisibleReleaseChannel} database version
+                                  release
                                 </TooltipContent>
                               </Tooltip>
                             ),
@@ -166,7 +181,7 @@ const InfrastructureInfo = () => {
                             isOnLatestVersion && (
                               <Tooltip>
                                 <TooltipTrigger>
-                                  <Badge variant="brand" className="mr-1">
+                                  <Badge variant="success" className="mr-1">
                                     Latest
                                   </Badge>
                                 </TooltipTrigger>
@@ -181,62 +196,17 @@ const InfrastructureInfo = () => {
                       </>
                     )}
 
-                    {data?.eligible && !hasReadReplicas && <ProjectUpgradeAlert />}
-                    {data.eligible && hasReadReplicas && (
-                      <Alert_Shadcn_>
-                        <AlertTitle_Shadcn_>
-                          A new version of Postgres is available for your project
-                        </AlertTitle_Shadcn_>
-                        <AlertDescription_Shadcn_>
-                          You will need to remove all read replicas prior to upgrading your Postgres
-                          version to the latest available ({latestPgVersion}).
-                        </AlertDescription_Shadcn_>
-                      </Alert_Shadcn_>
-                    )}
-                    {!data?.eligible && (data?.extension_dependent_objects || []).length > 0 && (
-                      <Alert_Shadcn_
-                        variant="warning"
-                        title="A new version of Postgres is available for your project"
-                      >
-                        <AlertTitle_Shadcn_>
-                          A new version of Postgres is available
-                        </AlertTitle_Shadcn_>
-                        <AlertDescription_Shadcn_ className="flex flex-col gap-3">
-                          <div>
-                            <p className="mb-1">
-                              You'll need to remove the following extensions before upgrading:
-                            </p>
+                    {showDatabaseUpgrades && data && data.eligible ? (
+                      hasReadReplicas ? (
+                        <ReadReplicasWarning latestPgVersion={latestPgVersion} />
+                      ) : (
+                        <ProjectUpgradeAlert />
+                      )
+                    ) : null}
 
-                            <ul className="pl-4">
-                              {(data?.extension_dependent_objects || []).map((obj) => (
-                                <li className="list-disc" key={obj}>
-                                  {obj}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                          <p>
-                            {projectUpgradeEligibilityData?.potential_breaking_changes?.includes(
-                              'pg17_upgrade_unsupported_extensions'
-                            )
-                              ? 'These extensions are not supported in newer versions of Supabase Postgres.'
-                              : 'You can add them back after the upgrade is done. Check the docs for which ones might need to be removed.'}
-                          </p>
-
-                          <div>
-                            <Button size="tiny" type="default" asChild>
-                              <a
-                                href="https://supabase.com/docs/guides/platform/upgrading#extensions"
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                View docs
-                              </a>
-                            </Button>
-                          </div>
-                        </AlertDescription_Shadcn_>
-                      </Alert_Shadcn_>
-                    )}
+                    {showDatabaseUpgrades && data && !data.eligible && hasValidationErrors ? (
+                      <ValidationErrorsWarning validationErrors={data.validation_errors ?? []} />
+                    ) : null}
                   </>
                 )}
               </>
@@ -247,5 +217,3 @@ const InfrastructureInfo = () => {
     </>
   )
 }
-
-export default InfrastructureInfo

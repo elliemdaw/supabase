@@ -1,5 +1,7 @@
 import { PermissionAction } from '@supabase/shared-types/out/constants'
 import { Check } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { useQueryState } from 'nuqs'
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { toast } from 'sonner'
@@ -13,9 +15,9 @@ import type { components } from 'data/api'
 import { useAuthConfigUpdateMutation } from 'data/auth/auth-config-update-mutation'
 import { useProjectSettingsV2Query } from 'data/config/project-settings-v2-query'
 import { useCustomDomainsQuery } from 'data/custom-domains/custom-domains-query'
-import { useCheckPermissions } from 'hooks/misc/useCheckPermissions'
+import { useAsyncCheckPermissions } from 'hooks/misc/useCheckPermissions'
+import { useSelectedOrganizationQuery } from 'hooks/misc/useSelectedOrganization'
 import { BASE_PATH } from 'lib/constants'
-import { useQueryState } from 'nuqs'
 import { Button, Form, Input, Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from 'ui'
 import { Admonition } from 'ui-patterns'
 import { NO_REQUIRED_CHARACTERS } from '../Auth.constants'
@@ -23,21 +25,24 @@ import { AuthAlert } from './AuthAlert'
 import type { Provider } from './AuthProvidersForm.types'
 import FormField from './FormField'
 
-export interface ProviderFormProps {
+interface ProviderFormProps {
   config: components['schemas']['GoTrueConfigResponse']
   provider: Provider
   isActive: boolean
 }
 
+const doubleNegativeKeys = ['SMS_AUTOCONFIRM']
+
 export const ProviderForm = ({ config, provider, isActive }: ProviderFormProps) => {
+  const { resolvedTheme } = useTheme()
   const { ref: projectRef } = useParams()
+  const { data: organization } = useSelectedOrganizationQuery()
   const [urlProvider, setUrlProvider] = useQueryState('provider', { defaultValue: '' })
 
   const [open, setOpen] = useState(false)
-  const { mutate: updateAuthConfig, isLoading: isUpdatingConfig } = useAuthConfigUpdateMutation()
+  const { mutate: updateAuthConfig, isPending: isUpdatingConfig } = useAuthConfigUpdateMutation()
 
-  const doubleNegativeKeys = ['MAILER_AUTOCONFIRM', 'SMS_AUTOCONFIRM']
-  const canUpdateConfig: boolean = useCheckPermissions(
+  const { can: canUpdateConfig } = useAsyncCheckPermissions(
     PermissionAction.UPDATE,
     'custom_config_gotrue'
   )
@@ -61,6 +66,7 @@ export const ProviderForm = ({ config, provider, isActive }: ProviderFormProps) 
     )
   }
 
+  const isFreePlan = organization?.plan.id === 'free'
   const { data: settings } = useProjectSettingsV2Query({ projectRef })
   const protocol = settings?.app_config?.protocol ?? 'https'
   const endpoint = settings?.app_config?.endpoint
@@ -137,7 +143,7 @@ export const ProviderForm = ({ config, provider, isActive }: ProviderFormProps) 
         onClick={handleProviderClick}
         media={
           <img
-            src={`${BASE_PATH}/img/icons/${provider.misc.iconKey}.svg`}
+            src={`${BASE_PATH}/img/icons/${provider.misc.iconKey}${provider.misc.hasLightIcon && !resolvedTheme?.includes('dark') ? '-light' : ''}.svg`}
             width={18}
             height={18}
             alt={`${provider.title} auth icon`}
@@ -165,7 +171,7 @@ export const ProviderForm = ({ config, provider, isActive }: ProviderFormProps) 
         <SheetContent className="flex flex-col gap-0">
           <SheetHeader className="shrink-0 flex items-center gap-4">
             <img
-              src={`${BASE_PATH}/img/icons/${provider.misc.iconKey}.svg`}
+              src={`${BASE_PATH}/img/icons/${provider.misc.iconKey}${provider.misc.hasLightIcon && !resolvedTheme?.includes('dark') ? '-light' : ''}.svg`}
               width={18}
               height={18}
               alt={`${provider.title} auth icon`}
@@ -190,25 +196,47 @@ export const ProviderForm = ({ config, provider, isActive }: ProviderFormProps) 
                         title={provider.title}
                         isHookSendSMSEnabled={config.HOOK_SEND_SMS_ENABLED}
                       />
-                      {Object.keys(provider.properties).map((x: string) => (
-                        <FormField
-                          key={x}
-                          name={x}
-                          setFieldValue={setFieldValue}
-                          properties={provider.properties[x]}
-                          formValues={values}
-                          disabled={shouldDisableField(x) || !canUpdateConfig}
-                        />
-                      ))}
+
+                      {Object.keys(provider.properties).map((x: string) => {
+                        let description = provider.properties[x].description
+                        if (description && projectRef) {
+                          description = description.replace(
+                            /\(\.\.\/auth\/(.*?)\)/g,
+                            `(/project/${projectRef}/auth/$1)`
+                          )
+                        }
+
+                        const properties = {
+                          ...provider.properties[x],
+                          description:
+                            provider.properties[x].isPaid && isFreePlan
+                              ? `${description} Only available on [Pro plan](/org/${organization.slug}/billing?panel=subscriptionPlan) and above.`
+                              : description,
+                        }
+                        const isDisabledDueToPlan = properties.isPaid && isFreePlan
+                        const shouldDisable =
+                          properties.type === 'boolean'
+                            ? isDisabledDueToPlan && !values[x]
+                            : isDisabledDueToPlan
+
+                        return (
+                          <FormField
+                            key={x}
+                            name={x}
+                            setFieldValue={setFieldValue}
+                            properties={properties}
+                            formValues={values}
+                            disabled={shouldDisableField(x) || !canUpdateConfig || shouldDisable}
+                          />
+                        )
+                      })}
 
                       {provider?.misc?.alert && (
                         <Admonition
                           type="warning"
                           title={provider.misc.alert.title}
                           description={
-                            <>
-                              <ReactMarkdown>{provider.misc.alert.description}</ReactMarkdown>
-                            </>
+                            <ReactMarkdown>{provider.misc.alert.description}</ReactMarkdown>
                           }
                         />
                       )}

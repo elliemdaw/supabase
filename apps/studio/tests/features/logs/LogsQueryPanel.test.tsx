@@ -7,18 +7,12 @@ import { render } from 'tests/helpers'
 test('run and clear', async () => {
   render(
     <LogsQueryPanel
-      defaultFrom=""
-      defaultTo=""
+      value={{ from: '', to: '', isHelper: false }}
       onDateChange={() => {}}
       onSelectSource={() => {}}
       onSelectTemplate={() => {}}
       warnings={[]}
-      warehouseCollections={[]}
-      dataSource="logs"
-      onDataSourceChange={() => {}}
       templates={[]}
-      warehouseTemplates={[]}
-      onSelectWarehouseTemplate={() => {}}
     />
   )
   await expect(screen.findByPlaceholderText(/Search/)).rejects.toThrow()
