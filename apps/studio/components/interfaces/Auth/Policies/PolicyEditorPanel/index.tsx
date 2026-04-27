@@ -3,37 +3,28 @@ import { Monaco } from '@monaco-editor/react'
 import type { PostgresPolicy } from '@supabase/postgres-meta'
 import { PermissionAction } from '@supabase/shared-types/out/constants'
 import { useQueryClient } from '@tanstack/react-query'
+import { useParams } from 'common'
 import { isEqual } from 'lodash'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import * as z from 'zod'
-
-import { useParams } from 'common'
-import { IStandaloneCodeEditor } from 'components/interfaces/SQLEditor/SQLEditor.types'
-import { ButtonTooltip } from 'components/ui/ButtonTooltip'
-import { useDatabasePolicyUpdateMutation } from 'data/database-policies/database-policy-update-mutation'
-import { databasePoliciesKeys } from 'data/database-policies/keys'
-import { QueryResponseError, useExecuteSqlMutation } from 'data/sql/execute-sql-mutation'
-import { useAsyncCheckPermissions } from 'hooks/misc/useCheckPermissions'
-import { useSelectedProjectQuery } from 'hooks/misc/useSelectedProject'
-import { useConfirmOnClose, type ConfirmOnCloseModalProps } from 'hooks/ui/useConfirmOnClose'
 import {
   Button,
-  Checkbox_Shadcn_,
-  Form_Shadcn_,
+  Checkbox,
+  cn,
+  Form,
   Label_Shadcn_,
   ScrollArea,
   Sheet,
   SheetContent,
   SheetFooter,
+  Tabs_Shadcn_,
   TabsContent_Shadcn_,
   TabsList_Shadcn_,
   TabsTrigger_Shadcn_,
-  Tabs_Shadcn_,
-  cn,
 } from 'ui'
-import ConfirmationModal from 'ui-patterns/Dialogs/ConfirmationModal'
+import * as z from 'zod'
+
 import { LockedCreateQuerySection, LockedRenameQuerySection } from './LockedQuerySection'
 import { PolicyDetailsV2 } from './PolicyDetailsV2'
 import { checkIfPolicyHasChanged, generateCreatePolicyQuery } from './PolicyEditorPanel.utils'
@@ -41,6 +32,15 @@ import { PolicyEditorPanelHeader } from './PolicyEditorPanelHeader'
 import { PolicyTemplates } from './PolicyTemplates'
 import { QueryError } from './QueryError'
 import { RLSCodeEditor } from './RLSCodeEditor'
+import { IStandaloneCodeEditor } from '@/components/interfaces/SQLEditor/SQLEditor.types'
+import { DiscardChangesConfirmationDialog } from '@/components/ui-patterns/Dialogs/DiscardChangesConfirmationDialog'
+import { ButtonTooltip } from '@/components/ui/ButtonTooltip'
+import { useDatabasePolicyUpdateMutation } from '@/data/database-policies/database-policy-update-mutation'
+import { databasePoliciesKeys } from '@/data/database-policies/keys'
+import { QueryResponseError, useExecuteSqlMutation } from '@/data/sql/execute-sql-mutation'
+import { useAsyncCheckPermissions } from '@/hooks/misc/useCheckPermissions'
+import { useSelectedProjectQuery } from '@/hooks/misc/useSelectedProject'
+import { useConfirmOnClose } from '@/hooks/ui/useConfirmOnClose'
 
 interface PolicyEditorPanelProps {
   visible: boolean
@@ -165,7 +165,7 @@ export const PolicyEditorPanel = memo(function ({
     return policyCreateUnsaved || policyUpdateUnsaved
   }, [command, name, roles, selectedPolicy])
 
-  const { confirmOnClose, modalProps: closeConfirmationModalProps } = useConfirmOnClose({
+  const { confirmOnClose, handleOpenChange, modalProps } = useConfirmOnClose({
     checkIsDirty: hasUnsavedChanges,
     onClose: onSelectCancel,
   })
@@ -197,7 +197,7 @@ export const PolicyEditorPanel = memo(function ({
         command,
         roles: roles.length === 0 ? 'public' : roles,
         using: using ?? '',
-        check: command === 'insert' ? using ?? '' : check ?? '',
+        check: command === 'insert' ? (using ?? '') : (check ?? ''),
       })
 
       setError(undefined)
@@ -290,9 +290,9 @@ export const PolicyEditorPanel = memo(function ({
 
   return (
     <>
-      <Form_Shadcn_ {...form}>
+      <Form {...form}>
         <form id={FORM_ID} onSubmit={form.handleSubmit(onSubmit)}>
-          <Sheet open={visible} onOpenChange={confirmOnClose}>
+          <Sheet open={visible} onOpenChange={handleOpenChange}>
             <SheetContent
               showClose={false}
               size={showTools ? 'lg' : 'default'}
@@ -461,7 +461,7 @@ export const PolicyEditorPanel = memo(function ({
 
                     {supportWithCheck && (
                       <div className="px-5 py-3 flex items-center gap-x-2">
-                        <Checkbox_Shadcn_
+                        <Checkbox
                           id="use-check"
                           name="use-check"
                           checked={showCheckBlock}
@@ -571,26 +571,14 @@ export const PolicyEditorPanel = memo(function ({
             </SheetContent>
           </Sheet>
         </form>
-      </Form_Shadcn_>
+      </Form>
 
-      <CloseConfirmationModal {...closeConfirmationModalProps} />
+      <DiscardChangesConfirmationDialog
+        {...modalProps}
+        description="Are you sure you want to close the editor? Any unsaved changes on your policy and conversations with the Assistant will be lost."
+      />
     </>
   )
 })
 
 PolicyEditorPanel.displayName = 'PolicyEditorPanel'
-
-const CloseConfirmationModal = ({ visible, onClose, onCancel }: ConfirmOnCloseModalProps) => (
-  <ConfirmationModal
-    visible={visible}
-    title="Discard changes"
-    confirmLabel="Discard"
-    onCancel={onCancel}
-    onConfirm={onClose}
-  >
-    <p className="text-sm text-foreground-light">
-      Are you sure you want to close the editor? Any unsaved changes on your policy and
-      conversations with the Assistant will be lost.
-    </p>
-  </ConfirmationModal>
-)

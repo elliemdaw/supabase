@@ -1,16 +1,12 @@
 import { LOCAL_STORAGE_KEYS, useParams } from 'common'
-import { ButtonTooltip } from 'components/ui/ButtonTooltip'
-import BarChart from 'components/ui/Charts/BarChart'
-import NoDataPlaceholder from 'components/ui/Charts/NoDataPlaceholder'
 import dayjs from 'dayjs'
-import { useLocalStorageQuery } from 'hooks/misc/useLocalStorage'
 import { ArrowUpDown, X } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo } from 'react'
 import {
   Badge,
   Button,
-  Checkbox_Shadcn_,
+  Checkbox,
   Label_Shadcn_,
   ResizableHandle,
   ResizablePanel,
@@ -25,6 +21,11 @@ import {
   TooltipTrigger,
 } from 'ui'
 import { Admonition } from 'ui-patterns'
+
+import { ButtonTooltip } from '@/components/ui/ButtonTooltip'
+import BarChart from '@/components/ui/Charts/BarChart'
+import NoDataPlaceholder from '@/components/ui/Charts/NoDataPlaceholder'
+import { useLocalStorageQuery } from '@/hooks/misc/useLocalStorage'
 
 type Results = { rows: readonly any[] }
 
@@ -268,7 +269,7 @@ export const ChartConfig = ({
         </div>
         <div className="*:flex *:gap-2 *:items-center grid gap-2 *:text-foreground-light *:p-1.5 *:pl-0">
           <Label_Shadcn_ className="" htmlFor="cumulative">
-            <Checkbox_Shadcn_
+            <Checkbox
               id="cumulative"
               name="cumulative"
               checked={config.cumulative}
@@ -278,7 +279,7 @@ export const ChartConfig = ({
           </Label_Shadcn_>
 
           <Label_Shadcn_ htmlFor="showLabels">
-            <Checkbox_Shadcn_
+            <Checkbox
               id="showLabels"
               name="showLabels"
               checked={config.showLabels}
@@ -288,7 +289,7 @@ export const ChartConfig = ({
           </Label_Shadcn_>
 
           <Label_Shadcn_ htmlFor="showGrid">
-            <Checkbox_Shadcn_
+            <Checkbox
               id="showGrid"
               name="showGrid"
               checked={config.showGrid}

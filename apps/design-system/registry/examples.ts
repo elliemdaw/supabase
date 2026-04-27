@@ -235,6 +235,12 @@ export const examples: Registry = [
     registryDependencies: ['calendar', 'form', 'popover'],
     files: ['example/calendar-form.tsx'],
   },
+  {
+    name: 'single-value-field-array-demo',
+    type: 'components:example',
+    registryDependencies: ['button', 'form', 'input'],
+    files: ['example/single-value-field-array-demo.tsx'],
+  },
   // {
   //   name: 'card-demo',
   //   type: 'components:example',
@@ -440,6 +446,18 @@ export const examples: Registry = [
     files: ['example/data-input-with-reveal-copy.tsx'],
   },
   {
+    name: 'data-input-with-reveal-copy-editable',
+    type: 'components:example',
+    registryDependencies: ['data-input'],
+    files: ['example/data-input-with-reveal-copy-editable.tsx'],
+  },
+  {
+    name: 'data-input-with-reveal-copy-editable-empty',
+    type: 'components:example',
+    registryDependencies: ['data-input'],
+    files: ['example/data-input-with-reveal-copy-editable-empty.tsx'],
+  },
+  {
     name: 'date-picker-demo',
     type: 'components:example',
     registryDependencies: ['button', 'calendar', 'popover'],
@@ -598,6 +616,23 @@ export const examples: Registry = [
     type: 'components:example',
     registryDependencies: ['input-otp', 'form'],
     files: ['example/input-otp-form.tsx'],
+  },
+  {
+    name: 'keyboard-shortcut-demo',
+    type: 'components:example',
+    registryDependencies: ['button'],
+    files: ['example/keyboard-shortcut-demo.tsx'],
+  },
+  {
+    name: 'keyboard-shortcut-pill',
+    type: 'components:example',
+    files: ['example/keyboard-shortcut-pill.tsx'],
+  },
+  {
+    name: 'keyboard-shortcut-inline',
+    type: 'components:example',
+    registryDependencies: ['button'],
+    files: ['example/keyboard-shortcut-inline.tsx'],
   },
   {
     name: 'label-demo',
@@ -760,6 +795,12 @@ export const examples: Registry = [
     type: 'components:example',
     registryDependencies: ['separator'],
     files: ['example/separator-demo.tsx'],
+  },
+  {
+    name: 'sheet-confirm-on-close-demo',
+    type: 'components:example',
+    registryDependencies: ['alert-dialog', 'button', 'input', 'label', 'separator', 'sheet'],
+    files: ['example/sheet-confirm-on-close-demo.tsx'],
   },
   {
     name: 'sheet-demo',
@@ -1100,6 +1141,12 @@ export const examples: Registry = [
     name: 'form-item-layout-demo',
     type: 'components:example',
     files: ['example/form-item-layout-demo.tsx'],
+  },
+  {
+    name: 'key-value-field-array-demo',
+    type: 'components:example',
+    registryDependencies: ['button', 'form', 'input'],
+    files: ['example/key-value-field-array-demo.tsx'],
   },
   {
     name: 'field-choice-card',
@@ -1457,6 +1504,18 @@ export const examples: Registry = [
     files: ['example/expanding-textarea-demo.tsx'],
   },
   {
+    name: 'error-display-demo',
+    type: 'components:example',
+    registryDependencies: ['error-display'],
+    files: ['example/error-display-demo.tsx'],
+  },
+  {
+    name: 'error-display-with-children',
+    type: 'components:example',
+    registryDependencies: ['error-display'],
+    files: ['example/error-display-with-children.tsx'],
+  },
+  {
     name: 'logs-bar-chart',
     type: 'components:example',
     files: ['example/logs-bar-chart.tsx'],
@@ -1586,5 +1645,10 @@ export const examples: Registry = [
     type: 'components:example',
     registryDependencies: ['mermaid'],
     files: ['example/mermaid-basic.tsx'],
+  },
+  {
+    name: 'status-code-demo',
+    type: 'components:example',
+    files: ['example/status-code-demo.tsx'],
   },
 ]

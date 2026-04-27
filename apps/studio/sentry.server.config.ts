@@ -13,7 +13,7 @@ Sentry.init({
   debug: false,
 
   // Enable performance monitoring
-  tracesSampleRate: 0.001, // Capture 0.1% of transactions for performance monitoring
+  tracesSampleRate: 0.02,
   ignoreErrors: [
     'ResizeObserver',
     'Failed to load Stripe.js',
