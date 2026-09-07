@@ -1,20 +1,20 @@
 import { AlertTriangle, ChevronRight, Inbox } from 'lucide-react'
 import { Badge, Button, cn } from 'ui'
-import { GenericSkeletonLoader } from 'ui-patterns'
+import { GenericSkeletonLoader } from 'ui-patterns/ShimmeringLoader'
 
 import type { AdvisorItem } from './AdvisorPanel.types'
 import {
+  advisorCategoryIcons,
   formatItemDate,
   getAdvisorItemSecondaryText,
   getAdvisorPanelItemDisplayTitle,
   severityBadgeVariants,
   severityColorClasses,
   severityLabels,
-  tabIconMap,
 } from './AdvisorPanel.utils'
 import { EmptyAdvisor } from './EmptyAdvisor'
 import type { Notification } from '@/data/notifications/notifications-v2-query'
-import type { AdvisorSeverity, AdvisorTab } from '@/state/advisor-state'
+import type { AdvisorCategory, AdvisorSeverity } from '@/state/advisor-state'
 
 const NoProjectNotice = () => {
   return (
@@ -23,7 +23,7 @@ const NoProjectNotice = () => {
       <div className="text-center">
         <p className="heading-default">Project required</p>
         <p className="text-foreground-light text-sm">
-          Select a project to view security and performance advisories
+          Select a project to view its security, performance and health advisories
         </p>
       </div>
     </div>
@@ -34,29 +34,36 @@ interface AdvisorPanelBodyProps {
   isLoading: boolean
   isError: boolean
   filteredItems: AdvisorItem[]
-  activeTab: AdvisorTab
+  categoryFilters: AdvisorCategory[]
   severityFilters: AdvisorSeverity[]
   onItemClick: (item: AdvisorItem) => void
   onClearFilters: () => void
+  onShowHiddenItems: () => void
   hiddenItemsCount: number
   hasAnyFilters: boolean
   hasProjectRef?: boolean
+  projectNameByRef?: ReadonlyMap<string, string>
 }
 
 export const AdvisorPanelBody = ({
   isLoading,
   isError,
   filteredItems,
-  activeTab,
+  categoryFilters,
   severityFilters,
   onItemClick,
   onClearFilters,
+  onShowHiddenItems,
   hiddenItemsCount,
   hasAnyFilters,
   hasProjectRef = true,
+  projectNameByRef,
 }: AdvisorPanelBodyProps) => {
-  // Show notice if no project ref and trying to view project-specific tabs
-  if (!hasProjectRef && activeTab !== 'messages' && activeTab !== 'all') {
+  // Notifications are the only items that exist without a project, so the notice replaces
+  // the list whenever the user has narrowed to categories that need one.
+  const needsProject =
+    categoryFilters.length > 0 && categoryFilters.every((category) => category !== 'messages')
+  if (!hasProjectRef && needsProject) {
     return <NoProjectNotice />
   }
 
@@ -83,7 +90,7 @@ export const AdvisorPanelBody = ({
   if (filteredItems.length === 0) {
     return (
       <EmptyAdvisor
-        activeTab={activeTab}
+        categoryFilters={categoryFilters}
         hasFilters={hasAnyFilters}
         onClearFilters={onClearFilters}
       />
@@ -94,14 +101,14 @@ export const AdvisorPanelBody = ({
     <>
       <div className="flex flex-col">
         {filteredItems.map((item) => {
-          const SeverityIcon = tabIconMap[item.tab as Exclude<AdvisorTab, 'all'>]
+          const CategoryIcon = advisorCategoryIcons[item.category]
           const severityClass = severityColorClasses[item.severity]
           const isNotification = item.source === 'notification'
           const notification = isNotification ? (item.original as Notification) : null
           const isUnread = notification?.status === 'new'
 
           const primaryText = getAdvisorPanelItemDisplayTitle(item)
-          const secondaryText = getAdvisorItemSecondaryText(item)
+          const secondaryText = getAdvisorItemSecondaryText(item, projectNameByRef)
           const metadataText =
             secondaryText ?? (item.createdAt ? formatItemDate(item.createdAt) : undefined)
           // Date strings (e.g. "a few seconds ago") come from formatItemDate and
@@ -111,7 +118,7 @@ export const AdvisorPanelBody = ({
           return (
             <div key={`${item.source}-${item.id}`} className="border-b">
               <Button
-                type="text"
+                variant="text"
                 className={cn(
                   'justify-start w-full block rounded-none h-auto py-3 px-4 hover:text-foreground',
                   isUnread && 'bg-surface-100/50'
@@ -120,10 +127,10 @@ export const AdvisorPanelBody = ({
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-3 overflow-hidden">
-                    <SeverityIcon
+                    <CategoryIcon
                       size={16}
                       strokeWidth={1.5}
-                      className={cn('flex-shrink-0', severityClass)}
+                      className={cn('shrink-0', severityClass)}
                     />
                     <div className="text-left flex flex-col gap-0.5 truncate flex-1 min-w-0">
                       <div className="truncate">{primaryText}</div>
@@ -138,7 +145,7 @@ export const AdvisorPanelBody = ({
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     {item.severity === 'critical' && (
                       <Badge variant={severityBadgeVariants[item.severity]}>
                         {severityLabels[item.severity]}
@@ -147,7 +154,7 @@ export const AdvisorPanelBody = ({
                     <ChevronRight
                       size={16}
                       strokeWidth={1.5}
-                      className="flex-shrink-0 text-foreground-lighter"
+                      className="shrink-0 text-foreground-lighter"
                     />
                   </div>
                 </div>
@@ -158,7 +165,7 @@ export const AdvisorPanelBody = ({
       </div>
       {severityFilters.length > 0 && hiddenItemsCount > 0 && (
         <div className="px-4 py-3">
-          <Button type="text" className="w-full" onClick={onClearFilters}>
+          <Button variant="text" className="w-full" onClick={onShowHiddenItems}>
             Show {hiddenItemsCount} more issue{hiddenItemsCount !== 1 ? 's' : ''}
           </Button>
         </div>
